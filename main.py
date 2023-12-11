@@ -1,10 +1,12 @@
 from util import handle_preflight
 import functions_framework
+from prisma import PrismaClient
 
 NEED_CORS_PREFLIGHT_RESPONSE = True
 ALLOWED_ORIGINS = "*"
-SUPPORTED_METHODS = ["GET", "OPTIONS"]
+SUPPORTED_METHODS = ["GET", "PUT", "DELETE", "OPTIONS"]
 
+prisma = PrismaClient()
 
 @functions_framework.http
 def http_function(request):
@@ -34,10 +36,47 @@ def http_function(request):
             # Handle CORS preflight request
             return handle_preflight(allowed_methods=SUPPORTED_METHODS)
 
-    # ToDo: Add your functionality and update the response and status code accordingly
     if request.method == "GET":
-        response = {"message": "Hello World!"}
+        only_tags = request.args.get("only", default=None)
+        if only_tags:
+            filtered_skills = schema.prisma.find_many(where={"id": {"in": [int(tag) for tag in only_tags]}})
+            response = filtered_skills
+        else:
+            response = schema.prisma.find_many()
         status_code = 200
+    
+    elif request.method == "GET" and "id" in request.args:
+        skill_id = int(request.args.get("id"))
+        skill = prisma.skills.find_first(where={"id": skill_id})
+        if skill:
+            response = skill
+            status_code = 200
+        else:
+            response = {"message": "Skill not found"}
+            status_code = 404
+
+    elif request.method == "PUT":
+        skill_id = int(request.args.get("id"))
+        skill = prisma.skills.find_first(where={"id": skill_id})
+        if skill:
+            new_skill_data = request.get_json()
+            updated_skill = prisma.skills.update(where={"id": skill_id}, data=new_skill_data)
+            response = updated_skill
+            status_code = 200
+        else:
+            response = {"message": "Skill not found"}
+            status_code = 404
+    elif request.method == "DELETE":
+        skill_id = int(request.args.get("id"))
+        skill = prisma.skills.find_first(where={"id": skill_id})
+        if skill:
+            deleted_skill = prisma.skills.delete(where={"id": skill_id})
+            response = deleted_skill
+            status_code = 200
+        else:
+            response = {"message": "Skill not found"}
+            status_code = 404
+
     else:
         response = {"message": "Method not supported"}
         status_code = 405
